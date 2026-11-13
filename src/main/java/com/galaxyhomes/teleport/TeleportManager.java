@@ -21,13 +21,9 @@ public class TeleportManager {
     private final Map<UUID, BukkitTask> pendingTeleports = new ConcurrentHashMap<>();
     private final Map<UUID, Long> cooldowns = new ConcurrentHashMap<>();
 
-    public GalaxyHomes getPlugin() {
-        return plugin;
-    }
+    public GalaxyHomes getPlugin() { return plugin; }
 
-    public void taskFinished(UUID uuid) {
-        pendingTeleports.remove(uuid);
-    }
+    public void taskFinished(UUID uuid) { pendingTeleports.remove(uuid); }
 
     public TeleportManager(GalaxyHomes plugin) {
         this.plugin = plugin;
@@ -36,7 +32,6 @@ public class TeleportManager {
 
     public boolean startTeleport(Player player, Location destination, String type, TeleportCallback callback) {
         UUID uuid = player.getUniqueId();
-
         if (pendingTeleports.containsKey(uuid)) {
             MessageUtils.sendMessage(player, "teleport-cancelled-command");
             return false;
@@ -44,7 +39,6 @@ public class TeleportManager {
 
         long cooldownEnd = cooldowns.getOrDefault(uuid, 0L);
         long now = System.currentTimeMillis();
-
         if (now < cooldownEnd) {
             long remaining = (cooldownEnd - now) / 1000 + 1;
             MessageUtils.sendMessage(player, "teleport-cooldown", Map.of("time", String.valueOf(remaining)));
@@ -52,7 +46,6 @@ public class TeleportManager {
         }
 
         int warmup = configManager.getWarmup(type);
-
         if (warmup <= 0) {
             performTeleport(player, destination, callback);
             setCooldown(uuid);
@@ -60,11 +53,8 @@ public class TeleportManager {
         }
 
         Location startLocation = player.getLocation().clone();
-
-        TeleportTask task = new TeleportTask(
-                this, player, destination, startLocation, warmup, type, callback
-        );
-
+        MessageUtils.sendMessage(player, "teleport-started");
+        TeleportTask task = new TeleportTask(this, player, destination, startLocation, warmup, type, callback);
         BukkitTask bukkitTask = task.runTaskTimer(plugin, 0L, 20L);
         pendingTeleports.put(uuid, bukkitTask);
         return true;
@@ -72,25 +62,23 @@ public class TeleportManager {
 
     public void cancelTeleport(UUID uuid, String reason) {
         BukkitTask task = pendingTeleports.remove(uuid);
+        if (task == null) return;
 
-        if (task != null) {
-            task.cancel();
-            Player player = Bukkit.getPlayer(uuid);
+        task.cancel();
+        Player player = Bukkit.getPlayer(uuid);
+        if (player == null || !player.isOnline()) return;
 
-            if (player != null && player.isOnline()) {
-                MessageUtils.sendMessage(player, reason);
-            }
+        MessageUtils.sendMessage(player, reason);
+        if ("teleport-cancelled-move".equals(reason) || "teleport-cancelled-damage".equals(reason)) {
+            SoundUtils.playSound(player, configManager.getSoundConfig("error"));
+            ParticleUtils.spawnParticles(player.getLocation(), configManager.getParticleConfig("cancelled"));
         }
     }
 
-    public boolean isTeleporting(UUID uuid) {
-        return pendingTeleports.containsKey(uuid);
-    }
+    public boolean isTeleporting(UUID uuid) { return pendingTeleports.containsKey(uuid); }
 
     public void cancelAllTeleports() {
-        for (BukkitTask task : pendingTeleports.values()) {
-            task.cancel();
-        }
+        for (BukkitTask task : pendingTeleports.values()) task.cancel();
         pendingTeleports.clear();
     }
 
@@ -112,47 +100,35 @@ public class TeleportManager {
     public void performTeleport(Player player, Location destination, TeleportCallback callback) {
         SoundUtils.playSound(player, configManager.getSoundConfig("success"));
         ParticleUtils.spawnParticles(destination, configManager.getParticleConfig("destination"));
-
         player.teleportAsync(destination).thenRun(() -> {
-            if (callback != null) {
-                callback.onComplete(true);
-            }
+            if (callback != null) callback.onComplete(true);
         }).exceptionally(throwable -> {
-            if (callback != null) {
-                callback.onComplete(false);
-            }
+            if (callback != null) callback.onComplete(false);
             return null;
         });
     }
 
     public void onPlayerMove(Player player, Location from, Location to) {
-        if (!configManager.isCancelOnMove()) return;
-
-        UUID uuid = player.getUniqueId();
-        if (!pendingTeleports.containsKey(uuid)) return;
-
+        if (!configManager.isCancelOnMove() || to == null || !pendingTeleports.containsKey(player.getUniqueId())) return;
+        if (from.getWorld() != to.getWorld()) {
+            cancelTeleport(player.getUniqueId(), "teleport-cancelled-move");
+            return;
+        }
         double threshold = configManager.getMoveThreshold();
-
         if (from.distanceSquared(to) > threshold * threshold) {
-            cancelTeleport(uuid, "teleport-cancelled-move");
+            cancelTeleport(player.getUniqueId(), "teleport-cancelled-move");
         }
     }
 
     public void onPlayerDamage(Player player) {
-        if (!configManager.isCancelOnDamage()) return;
-
-        UUID uuid = player.getUniqueId();
-
-        if (pendingTeleports.containsKey(uuid)) {
-            cancelTeleport(uuid, "teleport-cancelled-damage");
+        if (configManager.isCancelOnDamage() && pendingTeleports.containsKey(player.getUniqueId())) {
+            cancelTeleport(player.getUniqueId(), "teleport-cancelled-damage");
         }
     }
 
     public void onPlayerCommand(Player player) {
-        UUID uuid = player.getUniqueId();
-
-        if (pendingTeleports.containsKey(uuid)) {
-            cancelTeleport(uuid, "teleport-cancelled-command");
+        if (pendingTeleports.containsKey(player.getUniqueId())) {
+            cancelTeleport(player.getUniqueId(), "teleport-cancelled-command");
         }
     }
 
