@@ -18,7 +18,7 @@ public class TPACancelCommand extends BaseCommand {
         Player p = player(s);
         if (p == null) return true;
 
-        plugin.getTPAManager().cancelRequest(p);
+        plugin.getTPAManager().cancelTPARequest(p);
         return true;
     }
 }
