@@ -45,7 +45,7 @@ public class TPACommand extends BaseCommand {
     }
 
     private void openPlayerPicker(Player player) {
-        List<Player> players = Bukkit.getOnlinePlayers()
+        List<? extends Player> players = Bukkit.getOnlinePlayers()
             .stream()
             .filter(target -> !target.getUniqueId().equals(player.getUniqueId()))
             .sorted(Comparator.comparing(Player::getName, String.CASE_INSENSITIVE_ORDER))
