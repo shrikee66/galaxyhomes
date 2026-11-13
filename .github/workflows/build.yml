@@ -9,6 +9,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Clean conflicting files
+        run: rm -rf src pom.xml output.bin index.html
+
       - name: Unzip plugin source
         run: unzip -o plugin.zip
 
