@@ -9,11 +9,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Clean old files and folders
-        run: rm -rf src pom.xml output.bin index.html .gradle target
-
-      - name: Unzip plugin source
-        run: unzip -o plugin.zip
+      - name: Clean and Unzip Source
+        run: |
+          rm -rf src pom.xml output.bin index.html .gradle target
+          unzip -o plugin.zip
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
