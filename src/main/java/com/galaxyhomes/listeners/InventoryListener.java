@@ -35,19 +35,23 @@ public class InventoryListener implements Listener {
         String title = ChatColor.stripColor(e.getView().getTitle());
         if (title == null) return;
 
+        HomesCommand homesCommand = new HomesCommand(plugin);
+        if (homesCommand.handleJavaGuiClick(p, title, e.getCurrentItem())) {
+            e.setCancelled(true);
+            return;
+        }
+
         if ("Your Homes".equalsIgnoreCase(title)) {
             e.setCancelled(true);
-            if (e.getRawSlot() < 0 || e.getRawSlot() >= e.getView().getTopInventory().getSize()) return;
             int slot = e.getRawSlot();
-            if (slot >= 45) return;
+            if (slot < 0 || slot >= e.getView().getTopInventory().getSize() || slot >= 45) return;
             List<Home> homes = new ArrayList<>(plugin.getPlayerDataManager().getPlayerData(p.getUniqueId()).getHomes().values());
-            if (slot >= homes.size()) return;
-            Home home = homes.get(slot);
+            int page = homesCommand.getJavaHomePage(p);
+            int index = page * 45 + slot;
+            if (index >= homes.size()) return;
+            Home home = homes.get(index);
             var location = home.toLocation();
-            if (location == null) {
-                p.sendMessage("§cThat home's world is unavailable.");
-                return;
-            }
+            if (location == null) { p.sendMessage("§cThat home's world is unavailable."); return; }
             p.closeInventory();
             MessageUtils.sendMessage(p, "home-teleporting", Map.of("name", home.getName()));
             plugin.getTeleportManager().startTeleport(p, location, "home",
@@ -67,11 +71,7 @@ public class InventoryListener implements Listener {
             Player target;
             try { target = Bukkit.getPlayer(UUID.fromString(targetId)); }
             catch (IllegalArgumentException ex) { return; }
-            if (target == null) {
-                p.sendMessage("§cPlayer not found or offline.");
-                p.closeInventory();
-                return;
-            }
+            if (target == null) { p.sendMessage("§cPlayer not found or offline."); p.closeInventory(); return; }
             p.closeInventory();
             if ("Select player for TPAHere".equalsIgnoreCase(title)) plugin.getTPAManager().sendTPAHereRequest(p, target);
             else plugin.getTPAManager().sendTPARequest(p, target);
@@ -81,8 +81,9 @@ public class InventoryListener implements Listener {
     @EventHandler
     public void drag(InventoryDragEvent e) {
         String title = ChatColor.stripColor(e.getView().getTitle());
-        if ("Your Homes".equalsIgnoreCase(title) || "Select player for TPA".equalsIgnoreCase(title)
-            || "Select player for TPAHere".equalsIgnoreCase(title)) e.setCancelled(true);
+        if ("Your Homes".equalsIgnoreCase(title) || "Manage homes".equalsIgnoreCase(title)
+            || "Home actions".equalsIgnoreCase(title) || "Confirm home delete".equalsIgnoreCase(title)
+            || "Select player for TPA".equalsIgnoreCase(title) || "Select player for TPAHere".equalsIgnoreCase(title)) e.setCancelled(true);
     }
 
     @EventHandler
@@ -95,7 +96,5 @@ public class InventoryListener implements Listener {
     }
 
     @EventHandler
-    public void quit(PlayerQuitEvent e) {
-        HomesCommand.takePendingInput(e.getPlayer().getUniqueId());
-    }
+    public void quit(PlayerQuitEvent e) { HomesCommand.takePendingInput(e.getPlayer().getUniqueId()); }
 }
