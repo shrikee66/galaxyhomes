@@ -18,7 +18,7 @@ public class TPADenyCommand extends BaseCommand {
         Player p = player(s);
         if (p == null) return true;
 
-        plugin.getTPAManager().denyRequest(p);
+        plugin.getTPAManager().denyTPARequest(p);
         return true;
     }
 }
