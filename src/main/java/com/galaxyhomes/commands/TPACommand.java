@@ -15,6 +15,7 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class TPACommand extends BaseCommand {
 
@@ -45,11 +46,11 @@ public class TPACommand extends BaseCommand {
     }
 
     private void openPlayerPicker(Player player) {
-        List<? extends Player> players = Bukkit.getOnlinePlayers()
+        List<Player> players = Bukkit.getOnlinePlayers()
             .stream()
             .filter(target -> !target.getUniqueId().equals(player.getUniqueId()))
             .sorted(Comparator.comparing(Player::getName, String.CASE_INSENSITIVE_ORDER))
-            .toList();
+            .collect(Collectors.toList());
 
         if (players.isEmpty()) {
             player.sendMessage(ChatColor.RED + "No players are online.");
