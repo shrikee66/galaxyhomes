@@ -1,0 +1,193 @@
+package com.galaxyhomes.commands;
+
+import com.galaxyhomes.GalaxyHomes;
+import com.galaxyhomes.data.Home;
+import com.galaxyhomes.utils.MessageUtils;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.persistence.PersistentDataType;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+public class HomesCommand extends BaseCommand {
+
+    private static final String MAIN_TITLE = "Homes";
+    private static final String MANAGE_TITLE = "Manage homes";
+    private final NamespacedKey homeKey;
+
+    public HomesCommand(GalaxyHomes p) {
+        super(p);
+        this.homeKey = new NamespacedKey(plugin, "home_name");
+    }
+
+    public boolean onCommand(CommandSender s, Command c, String l, String[] a) {
+        if (!permission(s, "galaxyhomes.homes")) return true;
+
+        Player p = player(s);
+        if (p == null) return true;
+
+        open(p, 0);
+        return true;
+    }
+
+    public void open(Player p, int page) {
+        List<Home> homes = new ArrayList<>(data(p).getHomes().values());
+        Inventory inv = Bukkit.createInventory(null, 54, MAIN_TITLE);
+
+        if (homes.isEmpty()) {
+            inv.setItem(22, createActionItem(
+                Material.LIME_CONCRETE,
+                ChatColor.GREEN + "+ New home here",
+                "new_home"
+            ));
+            p.openInventory(inv);
+            return;
+        }
+
+        int start = page * 45;
+        int slot = 0;
+        for (int i = start; i < Math.min(start + 45, homes.size()); i++) {
+            Home h = homes.get(i);
+            inv.setItem(slot++, createHomeItem(h));
+        }
+
+        if (homes.size() > 45 && page == 0) {
+            inv.setItem(53, createArrowItem(ChatColor.GRAY + "Next page", "next_page"));
+        }
+
+        if (page > 0) {
+            inv.setItem(45, createArrowItem(ChatColor.GRAY + "Previous page", "prev_page"));
+        }
+
+        ItemStack manage = createActionItem(
+            Material.OAK_SIGN,
+            ChatColor.WHITE + "Manage homes",
+            "manage_homes"
+        );
+        inv.setItem(49, manage);
+
+        p.openInventory(inv);
+    }
+
+    public void openManageHome(Player p, Home home) {
+        Inventory inv = Bukkit.createInventory(null, 27, MANAGE_TITLE);
+
+        ItemStack teleport = createActionItem(
+            Material.ENDER_PEARL,
+            ChatColor.GOLD + "Teleport",
+            "teleport" + "|" + home.getName()
+        );
+        ItemMeta teleportMeta = teleport.getItemMeta();
+        teleportMeta.getPersistentDataContainer().set(homeKey, PersistentDataType.STRING, home.getName());
+        teleport.setItemMeta(teleportMeta);
+        inv.setItem(10, teleport);
+
+        ItemStack rename = createActionItem(
+            Material.NAME_TAG,
+            ChatColor.YELLOW + "Rename",
+            "rename" + "|" + home.getName()
+        );
+        ItemMeta renameMeta = rename.getItemMeta();
+        renameMeta.getPersistentDataContainer().set(homeKey, PersistentDataType.STRING, home.getName());
+        rename.setItemMeta(renameMeta);
+        inv.setItem(13, rename);
+
+        ItemStack delete = createActionItem(
+            Material.TNT,
+            ChatColor.RED + "Delete",
+            "delete" + "|" + home.getName()
+        );
+        ItemMeta deleteMeta = delete.getItemMeta();
+        deleteMeta.getPersistentDataContainer().set(homeKey, PersistentDataType.STRING, home.getName());
+        delete.setItemMeta(deleteMeta);
+        inv.setItem(16, delete);
+
+        ItemStack header = new ItemStack(Material.PAPER);
+        ItemMeta headerMeta = header.getItemMeta();
+        headerMeta.setDisplayName(ChatColor.GRAY + home.getName());
+        header.setItemMeta(headerMeta);
+        inv.setItem(4, header);
+
+        p.openInventory(inv);
+    }
+
+    private ItemStack createHomeItem(Home home) {
+        ItemStack item = new ItemStack(Material.BOOK);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(ChatColor.WHITE + home.getName());
+        meta.setLore(List.of(
+            ChatColor.GRAY + "World: " + ChatColor.WHITE + home.getWorldName(),
+            ChatColor.GRAY + "XYZ: " + ChatColor.WHITE + (int) home.getX() + ", " + (int) home.getY() + ", " + (int) home.getZ(),
+            ChatColor.GREEN + "Click to manage"
+        ));
+        meta.getPersistentDataContainer().set(homeKey, PersistentDataType.STRING, home.getName());
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack createActionItem(Material material, String displayName, String actionKey) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(displayName);
+        meta.getPersistentDataContainer().set(
+            new NamespacedKey(plugin, "action_key"),
+            PersistentDataType.STRING,
+            actionKey
+        );
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack createArrowItem(String displayName, String actionKey) {
+        ItemStack item = new ItemStack(Material.ARROW);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(displayName);
+        meta.getPersistentDataContainer().set(
+            new NamespacedKey(plugin, "action_key"),
+            PersistentDataType.STRING,
+            actionKey
+        );
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    public void performHomeAction(Player p, Home home, String action) {
+        switch (action) {
+            case "teleport" -> {
+                var loc = home.toLocation();
+                if (loc == null) {
+                    p.sendMessage(ChatColor.RED + "That home's world is unavailable.");
+                    return;
+                }
+                MessageUtils.sendMessage(p, "home-teleporting", Map.of("name", home.getName()));
+                plugin.getTeleportManager().startTeleport(p, loc, "home", ok -> {
+                    if (ok) {
+                        MessageUtils.sendMessage(p, "home-teleported", Map.of("name", home.getName()));
+                    }
+                });
+            }
+            case "rename" -> {
+                p.sendMessage(ChatColor.YELLOW + "Rename home: type /renamehome " + home.getName() + " <new-name>");
+            }
+            case "delete" -> {
+                if (data(p).removeHome(home.getName())) {
+                    MessageUtils.sendMessage(p, "home-deleted", Map.of("name", home.getName()));
+                }
+                p.closeInventory();
+            }
+            default -> {
+                p.sendMessage(ChatColor.RED + "Unknown home action.");
+            }
+        }
+    }
+}
+

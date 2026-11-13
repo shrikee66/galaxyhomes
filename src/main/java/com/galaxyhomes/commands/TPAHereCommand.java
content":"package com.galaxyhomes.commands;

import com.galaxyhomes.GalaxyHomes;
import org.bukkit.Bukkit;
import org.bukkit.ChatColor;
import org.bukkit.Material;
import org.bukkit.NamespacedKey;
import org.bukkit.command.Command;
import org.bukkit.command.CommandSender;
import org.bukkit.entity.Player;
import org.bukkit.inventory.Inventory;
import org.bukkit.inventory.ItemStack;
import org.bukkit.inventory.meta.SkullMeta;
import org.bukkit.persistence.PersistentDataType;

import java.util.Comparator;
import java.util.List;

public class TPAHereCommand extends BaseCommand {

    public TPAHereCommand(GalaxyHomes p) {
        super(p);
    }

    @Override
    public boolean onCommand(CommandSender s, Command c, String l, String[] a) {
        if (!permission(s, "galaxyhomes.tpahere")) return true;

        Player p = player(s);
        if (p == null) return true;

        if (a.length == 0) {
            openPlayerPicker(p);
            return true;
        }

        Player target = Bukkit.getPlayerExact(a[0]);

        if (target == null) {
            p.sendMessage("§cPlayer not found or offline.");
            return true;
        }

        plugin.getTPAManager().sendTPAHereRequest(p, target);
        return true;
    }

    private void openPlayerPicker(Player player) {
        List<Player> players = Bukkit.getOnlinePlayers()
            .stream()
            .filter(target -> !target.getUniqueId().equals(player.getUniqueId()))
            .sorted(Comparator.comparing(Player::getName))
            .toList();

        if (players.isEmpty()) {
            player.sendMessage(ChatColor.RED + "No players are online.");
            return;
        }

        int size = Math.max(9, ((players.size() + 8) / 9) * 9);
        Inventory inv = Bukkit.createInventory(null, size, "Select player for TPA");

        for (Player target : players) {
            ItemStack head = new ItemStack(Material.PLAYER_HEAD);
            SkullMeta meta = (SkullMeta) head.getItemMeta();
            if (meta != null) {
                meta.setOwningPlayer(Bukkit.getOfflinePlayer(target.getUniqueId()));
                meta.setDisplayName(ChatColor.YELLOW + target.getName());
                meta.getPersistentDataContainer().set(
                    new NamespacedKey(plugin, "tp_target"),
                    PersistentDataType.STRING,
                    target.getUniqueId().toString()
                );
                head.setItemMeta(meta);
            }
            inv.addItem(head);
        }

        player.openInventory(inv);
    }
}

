@@ -1,0 +1,82 @@
+package com.galaxyhomes.commands;
+
+import com.galaxyhomes.GalaxyHomes;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.persistence.PersistentDataType;
+
+import java.util.Comparator;
+import java.util.List;
+
+public class TPACommand extends BaseCommand {
+
+    public TPACommand(GalaxyHomes p) {
+        super(p);
+    }
+
+    public boolean onCommand(CommandSender s, Command c, String l, String[] a) {
+        if (!permission(s, "galaxyhomes.tpa")) return true;
+
+        Player p = player(s);
+        if (p == null) return true;
+
+        if (a.length == 0) {
+            openPlayerPicker(p, false);
+            return true;
+        }
+
+        Player t = Bukkit.getPlayerExact(a[0]);
+
+        if (t == null) {
+            s.sendMessage("§cPlayer not found or offline.");
+            return true;
+        }
+
+        plugin.getTPAManager().sendTPARequest(p, t);
+        return true;
+    }
+
+    private void openPlayerPicker(Player player, boolean here) {
+        List<Player> players = Bukkit.getOnlinePlayers()
+            .stream()
+            .filter(target -> !target.getUniqueId().equals(player.getUniqueId()))
+            .sorted(Comparator.comparing(Player::getName))
+            .toList();
+
+        if (players.isEmpty()) {
+            player.sendMessage(ChatColor.RED + "No players are online.");
+            return;
+        }
+
+        int size = Math.max(9, ((players.size() + 8) / 9) * 9);
+        Inventory inv = Bukkit.createInventory(null, size, here ? "Select player for TPA" : "Select player");
+
+        for (Player target : players) {
+            ItemStack head = new ItemStack(Material.PLAYER_HEAD);
+            SkullMeta meta = (SkullMeta) head.getItemMeta();
+            if (meta != null) {
+                meta.setOwningPlayer(Bukkit.getOfflinePlayer(target.getUniqueId()));
+                meta.setDisplayName(ChatColor.YELLOW + target.getName());
+                meta.getPersistentDataContainer().set(
+                    new NamespacedKey(plugin, "tp_target"),
+                    PersistentDataType.STRING,
+                    target.getUniqueId().toString()
+                );
+                head.setItemMeta(meta);
+            }
+            inv.addItem(head);
+        }
+
+        player.openInventory(inv);
+    }
+}
+

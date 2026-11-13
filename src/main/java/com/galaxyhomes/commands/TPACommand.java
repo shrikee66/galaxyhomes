@@ -1,4 +1,3 @@
-
 package com.galaxyhomes.commands;
 
 import com.galaxyhomes.GalaxyHomes;
@@ -8,9 +7,7 @@ import org.bukkit.entity.Player;
 
 public class TPACommand extends BaseCommand {
 
-    public TPACommand(GalaxyHomes p) {
-        super(p);
-    }
+    public TPACommand(GalaxyHomes p) { super(p); }
 
     public boolean onCommand(CommandSender s, Command c, String l, String[] a) {
         if (!permission(s, "galaxyhomes.tpa")) return true;
@@ -24,7 +21,6 @@ public class TPACommand extends BaseCommand {
         }
 
         Player t = Bukkit.getPlayerExact(a[0]);
-
         if (t == null) {
             s.sendMessage("§cPlayer not found or offline.");
             return true;
