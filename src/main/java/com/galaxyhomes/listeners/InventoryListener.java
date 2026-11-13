@@ -30,7 +30,23 @@ public class InventoryListener implements Listener {
         String title = ChatColor.stripColor(event.getView().getTitle());
         if (title == null) return;
 
-        if (new HomesCommand(plugin).handleMenuClick(player, title, event.getCurrentItem())) {
+        if ("Homes".equalsIgnoreCase(title) && event.isRightClick()
+            && event.getRawSlot() >= 0 && event.getRawSlot() < event.getView().getTopInventory().getSize()) {
+            ItemStack item = event.getCurrentItem();
+            if (item != null && item.getType() != Material.AIR && item.hasItemMeta()) {
+                String action = item.getItemMeta().getPersistentDataContainer()
+                    .get(new NamespacedKey(plugin, "home_menu_action"), PersistentDataType.STRING);
+                String homeName = item.getItemMeta().getPersistentDataContainer()
+                    .get(new NamespacedKey(plugin, "home_menu_name"), PersistentDataType.STRING);
+                if ("teleport".equals(action) && homeName != null) {
+                    event.setCancelled(true);
+                    new HomesCommand(plugin).openHomeDetails(player, homeName);
+                    return;
+                }
+            }
+        }
+
+        if (new HomesCommand(plugin).handleMenuClick(player, title, event.getCurrentItem(), event.isRightClick())) {
             event.setCancelled(true);
             return;
         }

@@ -48,7 +48,6 @@ public class HomesCommand extends BaseCommand {
     }
 
     public void open(Player player, int page) {
-        // Bedrock users keep the native form UI; Java users get the chest inventory below.
         if (GeyserUtils.isBedrockPlayer(player)) {
             openBedrockHomes(player, page);
             return;
@@ -71,13 +70,13 @@ public class HomesCommand extends BaseCommand {
             inventory.setItem(i - start, menuItem(Material.RED_BED, ChatColor.YELLOW + home.getName(), List.of(
                 ChatColor.GRAY + "World: " + ChatColor.WHITE + home.getWorldName(),
                 ChatColor.GRAY + "X: " + (int) home.getX() + "  Y: " + (int) home.getY() + "  Z: " + (int) home.getZ(),
-                ChatColor.GREEN + "Click to teleport"
+                ChatColor.GREEN + "Left-click to teleport",
+                ChatColor.YELLOW + "Right-click to manage"
             ), "teleport", home.getName(), actionKey, nameKey));
         }
         if (homes.isEmpty()) inventory.setItem(22, menuItem(Material.BOOK, ChatColor.RED + "No homes yet",
             List.of(ChatColor.GRAY + "Use the green wool to create one"), "none", null, actionKey, nameKey));
 
-        // Requested Java-only footer controls.
         inventory.setItem(45, menuItem(Material.GREEN_WOOL, ChatColor.GREEN + "New home here",
             List.of(ChatColor.GRAY + "Create a home at your current location"), "new_home", null, actionKey, nameKey));
         inventory.setItem(49, menuItem(Material.NETHER_STAR, ChatColor.GOLD + "Made by shrikee <3",
@@ -113,7 +112,8 @@ public class HomesCommand extends BaseCommand {
         player.openInventory(inventory);
     }
 
-    private void openHomeDetails(Player player, String name) {
+    /** Opens the actions menu for one selected home (used by right-click and manage list). */
+    public void openHomeDetails(Player player, String name) {
         Home home = data(player).getHome(name);
         if (home == null) {
             MessageUtils.sendMessage(player, "home-not-found", Map.of("name", name));
@@ -143,8 +143,7 @@ public class HomesCommand extends BaseCommand {
         player.openInventory(inventory);
     }
 
-    /** Handles clicks in plugin-owned Java homes inventories. */
-    public boolean handleMenuClick(Player player, String title, ItemStack clicked) {
+    public boolean handleMenuClick(Player player, String title, ItemStack clicked, boolean rightClick) {
         if (!HOMES_TITLE.equalsIgnoreCase(title) && !MANAGE_TITLE.equalsIgnoreCase(title)
             && !DETAIL_TITLE.equalsIgnoreCase(title) && !DELETE_TITLE.equalsIgnoreCase(title)) return false;
         if (clicked == null || clicked.getType() == Material.AIR) return true;
@@ -155,6 +154,10 @@ public class HomesCommand extends BaseCommand {
         UUID uuid = player.getUniqueId();
 
         if (HOMES_TITLE.equalsIgnoreCase(title)) {
+            if (rightClick && "teleport".equals(action) && name != null) {
+                openHomeDetails(player, name);
+                return true;
+            }
             int page = HOME_PAGES.getOrDefault(uuid, 0);
             if ("new_home".equals(action)) beginCreate(player);
             else if ("manage".equals(action)) openManageHomes(player, 0);
