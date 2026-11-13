@@ -12,7 +12,15 @@ import java.util.function.Consumer;
 public final class GeyserUtils {
     private GeyserUtils() {}
 
-    public record Button(String text, String response) {}
+    public record Button(String text, String response, String imageType, String imageData) {
+        public Button(String text, String response) { this(text, response, null, null); }
+        public Button(String text, String response, String imageType, String imageData) {
+            this.text = text;
+            this.response = response;
+            this.imageType = imageType;
+            this.imageData = imageData;
+        }
+    }
 
     public static boolean isBedrockPlayer(Player player) {
         if (player == null) return false;
@@ -26,40 +34,28 @@ public final class GeyserUtils {
         }
     }
 
-    /** Sends a native Bedrock SimpleForm when Floodgate and Cumulus are available. */
-    public static void sendForm(
-        Player player,
-        String id,
-        String title,
-        String content,
-        List<Button> buttons,
-        BiConsumer<Player, String> callback
-    ) {
+    /** Sends a native Bedrock SimpleForm with optional item icons and routes button responses. */
+    public static void sendForm(Player player, String id, String title, String content,
+                                 List<Button> buttons, BiConsumer<Player, String> callback) {
         if (player == null || !isBedrockPlayer(player)) return;
-
         try {
             Class<?> simpleForm = Class.forName("org.geysermc.cumulus.form.SimpleForm");
             Object builder = simpleForm.getMethod("builder").invoke(null);
             invokeString(builder, "title", title);
             invokeString(builder, "content", content);
-            for (Button button : buttons) invokeString(builder, "button", button.text());
+            for (Button button : buttons) addButton(builder, button);
 
-            // Cumulus has both Consumer and BiConsumer overloads. Select the Consumer
-            // overload explicitly; choosing the first overload silently omitted our handler.
-            Method resultHandler = findConsumerMethod(builder.getClass(), "validResultHandler");
-            if (resultHandler != null && callback != null) {
+            Method handlerMethod = findConsumerMethod(builder.getClass(), "validResultHandler");
+            if (handlerMethod != null && callback != null) {
                 Consumer<Object> handler = response -> {
                     try {
-                        int index = ((Number) response.getClass().getMethod("clickedButtonId")
-                            .invoke(response)).intValue();
-                        if (index >= 0 && index < buttons.size()) {
-                            callback.accept(player, buttons.get(index).response());
-                        }
+                        int index = ((Number) response.getClass().getMethod("clickedButtonId").invoke(response)).intValue();
+                        if (index >= 0 && index < buttons.size()) callback.accept(player, buttons.get(index).response());
                     } catch (ReflectiveOperationException | RuntimeException ignored) {
-                        // Invalid or unsupported response; leave the request available to commands.
+                        // Invalid response: leave pending requests/homes untouched.
                     }
                 };
-                resultHandler.invoke(builder, handler);
+                handlerMethod.invoke(builder, handler);
             }
 
             Object form = builder.getClass().getMethod("build").invoke(builder);
@@ -73,25 +69,31 @@ public final class GeyserUtils {
                     return;
                 }
             }
-        } catch (ReflectiveOperationException | LinkageError | RuntimeException ignored) {
-            // Fall through to a usable command-based fallback if form APIs aren't available.
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException ex) {
+            player.sendMessage(MessageUtils.color("&e" + title + "&7: " + content + " &8(Use the in-game commands if forms are unavailable)"));
         }
+    }
 
-        player.sendMessage(MessageUtils.color("&e" + title + "&7: " + content
-            + " &8(Use /tpaccept or /tpdeny)"));
+    private static void addButton(Object builder, Button button) throws ReflectiveOperationException {
+        if (button.imageType() != null && button.imageData() != null) {
+            Class<?> formImage = Class.forName("org.geysermc.cumulus.util.FormImage$Type");
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Object type = Enum.valueOf((Class<? extends Enum>) formImage.asSubclass(Enum.class), button.imageType());
+            Method withImage = builder.getClass().getMethod("button", String.class, formImage, String.class);
+            withImage.invoke(builder, button.text(), type, button.imageData());
+        } else {
+            invokeString(builder, "button", button.text());
+        }
     }
 
     private static void invokeString(Object target, String methodName, String value) throws ReflectiveOperationException {
-        Method method = target.getClass().getMethod(methodName, String.class);
-        method.invoke(target, value);
+        target.getClass().getMethod(methodName, String.class).invoke(target, value);
     }
 
     private static Method findConsumerMethod(Class<?> type, String methodName) {
         for (Method method : type.getMethods()) {
             if (method.getName().equals(methodName) && method.getParameterCount() == 1
-                && method.getParameterTypes()[0].isAssignableFrom(Consumer.class)) {
-                return method;
-            }
+                && method.getParameterTypes()[0].isAssignableFrom(Consumer.class)) return method;
         }
         return null;
     }
