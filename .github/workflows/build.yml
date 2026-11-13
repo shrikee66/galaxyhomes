@@ -9,8 +9,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Clean conflicting files
-        run: rm -rf src pom.xml output.bin index.html
+      - name: Clean old files and folders
+        run: rm -rf src pom.xml output.bin index.html .gradle target
 
       - name: Unzip plugin source
         run: unzip -o plugin.zip
