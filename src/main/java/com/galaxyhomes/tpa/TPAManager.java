@@ -73,29 +73,21 @@ public class TPAManager {
             return false;
         }
 
-        TPARequest request = new TPARequest(
-                senderId, targetId, TPARequest.Type.TPA,
-                configManager.getTPAExpireSeconds()
-        );
-
+        TPARequest request = new TPARequest(senderId, targetId, TPARequest.Type.TPA,
+                configManager.getTPAExpireSeconds());
         outgoingRequests.put(senderId, request);
         incomingRequests.computeIfAbsent(targetId, k -> new ArrayList<>()).add(request);
 
         MessageUtils.sendMessage(sender, "tpa-sent", Map.of(
-                "player", target.getName(),
-                "time", String.valueOf(configManager.getTPAExpireSeconds())
-        ));
+                "player", target.getName(), "time", String.valueOf(configManager.getTPAExpireSeconds())));
         SoundUtils.playSound(sender, configManager.getSoundConfig("tpa-sent"));
 
         if (target.isOnline()) {
             MessageUtils.sendMessage(target, "tpa-received", Map.of(
-                    "player", sender.getName(),
-                    "time", String.valueOf(configManager.getTPAExpireSeconds())
-            ));
+                    "player", sender.getName(), "time", String.valueOf(configManager.getTPAExpireSeconds())));
             SoundUtils.playSound(target, configManager.getSoundConfig("tpa-received"));
             showIncomingRequestForm(target, request);
         }
-
         return true;
     }
 
@@ -133,29 +125,21 @@ public class TPAManager {
             return false;
         }
 
-        TPARequest request = new TPARequest(
-                senderId, targetId, TPARequest.Type.TPAHERE,
-                configManager.getTPAExpireSeconds()
-        );
-
+        TPARequest request = new TPARequest(senderId, targetId, TPARequest.Type.TPAHERE,
+                configManager.getTPAExpireSeconds());
         outgoingRequests.put(senderId, request);
         incomingRequests.computeIfAbsent(targetId, k -> new ArrayList<>()).add(request);
 
         MessageUtils.sendMessage(sender, "tpahere-sent", Map.of(
-                "player", target.getName(),
-                "time", String.valueOf(configManager.getTPAExpireSeconds())
-        ));
+                "player", target.getName(), "time", String.valueOf(configManager.getTPAExpireSeconds())));
         SoundUtils.playSound(sender, configManager.getSoundConfig("tpahere-sent"));
 
         if (target.isOnline()) {
             MessageUtils.sendMessage(target, "tpahere-received", Map.of(
-                    "player", sender.getName(),
-                    "time", String.valueOf(configManager.getTPAExpireSeconds())
-            ));
+                    "player", sender.getName(), "time", String.valueOf(configManager.getTPAExpireSeconds())));
             SoundUtils.playSound(target, configManager.getSoundConfig("tpahere-received"));
             showIncomingRequestForm(target, request);
         }
-
         return true;
     }
 
@@ -165,13 +149,9 @@ public class TPAManager {
             MessageUtils.sendMessage(target, "tpa-no-pending-requests");
             return false;
         }
-
         for (TPARequest request : incoming) {
-            if (request.getSender().equals(senderId)) {
-                return processAcceptRequest(target, request);
-            }
+            if (request.getSender().equals(senderId)) return processAcceptRequest(target, request);
         }
-
         MessageUtils.sendMessage(target, "tpa-no-pending-requests");
         return false;
     }
@@ -182,7 +162,6 @@ public class TPAManager {
             MessageUtils.sendMessage(target, "tpa-no-pending-requests");
             return false;
         }
-
         return processAcceptRequest(target, incoming.get(incoming.size() - 1));
     }
 
@@ -200,7 +179,6 @@ public class TPAManager {
                 MessageUtils.sendMessage(target, "tpa-teleport-failed");
                 return false;
             }
-
             MessageUtils.sendMessage(target, "tpa-accepted", Map.of("player", sender.getName()));
             MessageUtils.sendMessage(sender, "tpa-accepted-target", Map.of("player", target.getName()));
         } else {
@@ -209,7 +187,6 @@ public class TPAManager {
                 MessageUtils.sendMessage(target, "tpa-teleport-failed");
                 return false;
             }
-
             MessageUtils.sendMessage(target, "tpahere-accepted", Map.of("player", sender.getName()));
             MessageUtils.sendMessage(sender, "tpahere-accepted-target", Map.of("player", target.getName()));
         }
@@ -226,13 +203,9 @@ public class TPAManager {
             MessageUtils.sendMessage(target, "tpa-no-pending-requests");
             return false;
         }
-
         for (TPARequest request : incoming) {
-            if (request.getSender().equals(senderId)) {
-                return processDenyRequest(target, request);
-            }
+            if (request.getSender().equals(senderId)) return processDenyRequest(target, request);
         }
-
         MessageUtils.sendMessage(target, "tpa-no-pending-requests");
         return false;
     }
@@ -243,49 +216,61 @@ public class TPAManager {
             MessageUtils.sendMessage(target, "tpa-no-pending-requests");
             return false;
         }
-
         return processDenyRequest(target, incoming.get(incoming.size() - 1));
     }
 
     private boolean processDenyRequest(Player target, TPARequest request) {
         Player sender = Bukkit.getPlayer(request.getSender());
-
         if (sender != null && sender.isOnline()) {
             MessageUtils.sendMessage(sender, "tpa-denied", Map.of("player", target.getName()));
             SoundUtils.playSound(sender, configManager.getSoundConfig("tpa-deny"));
         }
-
         MessageUtils.sendMessage(target, "tpa-denied-target",
                 Map.of("player", sender != null ? sender.getName() : "Unknown"));
         SoundUtils.playSound(target, configManager.getSoundConfig("tpa-deny"));
-
         removeRequest(request);
+        return true;
+    }
+
+    /** Blocks the requester and removes this pending request. */
+    public boolean blockTPARequest(Player target, UUID senderId) {
+        List<TPARequest> incoming = incomingRequests.get(target.getUniqueId());
+        if (incoming == null) return false;
+        TPARequest request = incoming.stream()
+                .filter(candidate -> candidate.getSender().equals(senderId))
+                .findFirst().orElse(null);
+        if (request == null) return false;
+
+        PlayerData targetData = playerDataManager.getPlayerData(target.getUniqueId());
+        targetData.getTPAData().addBlocked(senderId);
+        targetData.setDirty(true);
+        removeRequest(request);
+
+        Player sender = Bukkit.getPlayer(senderId);
+        if (sender != null) MessageUtils.sendRawMessage(sender, "&c" + target.getName() + " blocked your TPA requests.");
+        MessageUtils.sendRawMessage(target, "&aBlocked TPA requests from " + (sender != null ? sender.getName() : "that player") + ".");
         return true;
     }
 
     public void cancelTPARequest(Player sender) {
         TPARequest request = outgoingRequests.remove(sender.getUniqueId());
         if (request == null) return;
-
         List<TPARequest> incoming = incomingRequests.get(request.getTarget());
         if (incoming != null) {
             incoming.remove(request);
             if (incoming.isEmpty()) incomingRequests.remove(request.getTarget());
         }
-
         Player target = Bukkit.getPlayer(request.getTarget());
         if (target != null && target.isOnline()) {
             MessageUtils.sendMessage(target, "tpa-cancelled", Map.of("player", sender.getName()));
             SoundUtils.playSound(target, configManager.getSoundConfig("tpa-cancel"));
         }
-
         MessageUtils.sendMessage(sender, "tpa-cancelled-target");
         SoundUtils.playSound(sender, configManager.getSoundConfig("tpa-cancel"));
     }
 
     private void removeRequest(TPARequest request) {
         outgoingRequests.remove(request.getSender());
-
         List<TPARequest> incoming = incomingRequests.get(request.getTarget());
         if (incoming != null) {
             incoming.remove(request);
@@ -295,27 +280,22 @@ public class TPAManager {
 
     public void expireRequest(TPARequest request) {
         removeRequest(request);
-
         Player sender = Bukkit.getPlayer(request.getSender());
         if (sender != null && sender.isOnline()) {
             MessageUtils.sendMessage(sender, "tpa-expired", Map.of(
-                    "player", Bukkit.getOfflinePlayer(request.getTarget()).getName()
-            ));
+                    "player", Bukkit.getOfflinePlayer(request.getTarget()).getName()));
             SoundUtils.playSound(sender, configManager.getSoundConfig("tpa-expire"));
         }
-
         Player target = Bukkit.getPlayer(request.getTarget());
         if (target != null && target.isOnline()) {
             MessageUtils.sendMessage(target, "tpa-expired-target", Map.of(
-                    "player", Bukkit.getOfflinePlayer(request.getSender()).getName()
-            ));
+                    "player", Bukkit.getOfflinePlayer(request.getSender()).getName()));
             SoundUtils.playSound(target, configManager.getSoundConfig("tpa-expire"));
         }
     }
 
     public void handlePlayerQuit(Player player) {
         UUID playerId = player.getUniqueId();
-
         TPARequest outgoing = outgoingRequests.remove(playerId);
         if (outgoing != null) {
             List<TPARequest> incoming = incomingRequests.get(outgoing.getTarget());
@@ -324,12 +304,10 @@ public class TPAManager {
                 if (incoming.isEmpty()) incomingRequests.remove(outgoing.getTarget());
             }
         }
-
         List<TPARequest> incoming = incomingRequests.remove(playerId);
         if (incoming != null) {
             for (TPARequest request : incoming) {
                 outgoingRequests.remove(request.getSender());
-
                 Player sender = Bukkit.getPlayer(request.getSender());
                 if (sender != null && sender.isOnline()) {
                     MessageUtils.sendMessage(sender, "tpa-target-offline", Map.of("player", player.getName()));
@@ -343,13 +321,8 @@ public class TPAManager {
         return incomingRequests.getOrDefault(playerId, Collections.emptyList());
     }
 
-    public TPARequest getOutgoingRequest(UUID playerId) {
-        return outgoingRequests.get(playerId);
-    }
-
-    public boolean hasOutgoingRequest(UUID playerId) {
-        return outgoingRequests.containsKey(playerId);
-    }
+    public TPARequest getOutgoingRequest(UUID playerId) { return outgoingRequests.get(playerId); }
+    public boolean hasOutgoingRequest(UUID playerId) { return outgoingRequests.containsKey(playerId); }
 
     public boolean hasIncomingRequests(UUID playerId) {
         List<TPARequest> incoming = incomingRequests.get(playerId);
@@ -358,34 +331,23 @@ public class TPAManager {
 
     private void showIncomingRequestForm(Player target, TPARequest request) {
         if (!GeyserUtils.isBedrockPlayer(target)) return;
-
         Player sender = Bukkit.getPlayer(request.getSender());
         if (sender == null) return;
 
-        String message = request.getType() == TPARequest.Type.TPA
-                ? MessageUtils.getMessage("bedrock-tpa-request", Map.of(
-                        "player", sender.getName(),
-                        "time", String.valueOf(configManager.getTPAExpireSeconds())
-                ))
-                : MessageUtils.getMessage("bedrock-tpahere-request", Map.of(
-                        "player", sender.getName(),
-                        "time", String.valueOf(configManager.getTPAExpireSeconds())
-                ));
-
-        GeyserUtils.sendForm(target, "tpa-request-" + request.getSender(),
-                "Teleport Request", message,
+        String content = request.getType() == TPARequest.Type.TPA
+                ? sender.getName() + " wants to teleport to you."
+                : sender.getName() + " wants you to teleport to them.";
+        GeyserUtils.sendForm(target, "tpa-request-" + request.getSender(), "Teleport Request", content,
                 List.of(
                         new GeyserUtils.Button("Accept", "accept"),
-                        new GeyserUtils.Button("Deny", "deny")
+                        new GeyserUtils.Button("Deny", "deny"),
+                        new GeyserUtils.Button("Block " + sender.getName(), "block")
                 ),
                 (player, response) -> {
-                    if ("accept".equals(response)) {
-                        acceptTPARequest(player, request.getSender());
-                    } else if ("deny".equals(response)) {
-                        denyTPARequest(player, request.getSender());
-                    }
-                }
-        );
+                    if ("accept".equals(response)) acceptTPARequest(player, request.getSender());
+                    else if ("deny".equals(response)) denyTPARequest(player, request.getSender());
+                    else if ("block".equals(response)) blockTPARequest(player, request.getSender());
+                });
     }
 
     private void cleanupExpiredRequests() {
@@ -395,13 +357,11 @@ public class TPAManager {
         }
     }
 
-    public int getActiveRequestCount() {
-        return outgoingRequests.size();
-    }
+    public int getActiveRequestCount() { return outgoingRequests.size(); }
 
     public void cleanup() {
         cleanupTask.cancel();
         outgoingRequests.clear();
         incomingRequests.clear();
     }
-                                                                              }
+}
