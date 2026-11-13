@@ -27,16 +27,15 @@ import java.util.UUID;
 public class InventoryListener implements Listener {
     private final GalaxyHomes plugin;
 
-    public InventoryListener(GalaxyHomes p) { plugin = p; }
+    public InventoryListener(GalaxyHomes plugin) { this.plugin = plugin; }
 
     @EventHandler
     public void click(InventoryClickEvent e) {
-        if (!(e.getWhoClicked() instanceof Player p)) return;
+        if (!(e.getWhoClicked() instanceof Player player)) return;
         String title = ChatColor.stripColor(e.getView().getTitle());
         if (title == null) return;
 
-        HomesCommand homesCommand = new HomesCommand(plugin);
-        if (homesCommand.handleJavaGuiClick(p, title, e.getCurrentItem(), e.getRawSlot())) {
+        if (new HomesCommand(plugin).handleJavaGuiClick(player, title, e.getCurrentItem())) {
             e.setCancelled(true);
             return;
         }
@@ -45,17 +44,16 @@ public class InventoryListener implements Listener {
             e.setCancelled(true);
             if (e.getRawSlot() < 0 || e.getRawSlot() >= e.getView().getTopInventory().getSize()) return;
             int slot = e.getRawSlot();
-            List<Home> homes = new ArrayList<>(plugin.getPlayerDataManager().getPlayerData(p.getUniqueId()).getHomes().values());
-            int start = Math.max(0, slotPage(e.getView().getTopInventory()) * 45);
-            int index = start + slot;
-            if (index >= homes.size() || slot >= 45) return;
-            Home home = homes.get(index);
+            if (slot < 0 || slot >= 45) return;
+            List<Home> homes = new ArrayList<>(plugin.getPlayerDataManager().getPlayerData(player.getUniqueId()).getHomes().values());
+            if (slot >= homes.size()) return;
+            Home home = homes.get(slot);
             var location = home.toLocation();
-            if (location == null) { p.sendMessage("§cThat home's world is unavailable."); return; }
-            p.closeInventory();
-            MessageUtils.sendMessage(p, "home-teleporting", Map.of("name", home.getName()));
-            plugin.getTeleportManager().startTeleport(p, location, "home",
-                ok -> { if (ok) MessageUtils.sendMessage(p, "home-teleported", Map.of("name", home.getName())); });
+            if (location == null) { player.sendMessage("§cThat home's world is unavailable."); return; }
+            player.closeInventory();
+            MessageUtils.sendMessage(player, "home-teleporting", Map.of("name", home.getName()));
+            plugin.getTeleportManager().startTeleport(player, location, "home",
+                ok -> { if (ok) MessageUtils.sendMessage(player, "home-teleported", Map.of("name", home.getName())); });
             return;
         }
 
@@ -65,25 +63,16 @@ public class InventoryListener implements Listener {
             if (item == null || item.getType() == Material.AIR) return;
             ItemMeta meta = item.getItemMeta();
             if (meta == null) return;
-            NamespacedKey targetKey = new NamespacedKey(plugin, "target_uuid");
-            String targetId = meta.getPersistentDataContainer().get(targetKey, PersistentDataType.STRING);
+            String targetId = meta.getPersistentDataContainer().get(new NamespacedKey(plugin, "target_uuid"), PersistentDataType.STRING);
             if (targetId == null || targetId.isBlank()) return;
             Player target;
             try { target = Bukkit.getPlayer(UUID.fromString(targetId)); }
             catch (IllegalArgumentException ex) { return; }
-            if (target == null) { p.sendMessage("§cPlayer not found or offline."); p.closeInventory(); return; }
-            p.closeInventory();
-            if ("Select player for TPAHere".equalsIgnoreCase(title)) plugin.getTPAManager().sendTPAHereRequest(p, target);
-            else plugin.getTPAManager().sendTPARequest(p, target);
+            if (target == null) { player.sendMessage("§cPlayer not found or offline."); player.closeInventory(); return; }
+            player.closeInventory();
+            if ("Select player for TPAHere".equalsIgnoreCase(title)) plugin.getTPAManager().sendTPAHereRequest(player, target);
+            else plugin.getTPAManager().sendTPARequest(player, target);
         }
-    }
-
-    private int slotPage(org.bukkit.inventory.Inventory inv) {
-        ItemStack first = inv.getItem(0);
-        if (first == null || !first.hasItemMeta()) return 0;
-        String page = first.getItemMeta().getPersistentDataContainer().get(new NamespacedKey(plugin, "homes_page"), PersistentDataType.INTEGER) == null
-            ? null : String.valueOf(first.getItemMeta().getPersistentDataContainer().get(new NamespacedKey(plugin, "homes_page"), PersistentDataType.INTEGER));
-        try { return page == null ? 0 : Integer.parseInt(page); } catch (NumberFormatException ignored) { return 0; }
     }
 
     @EventHandler

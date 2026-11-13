@@ -31,20 +31,19 @@ public class HomesCommand extends BaseCommand {
     private static final String JAVA_MANAGE_TITLE = "Manage homes";
     private static final String JAVA_ACTIONS_TITLE = "Home actions";
     private static final String JAVA_DELETE_TITLE = "Confirm home delete";
+    private static final String ACTION_KEY = "home_menu_action";
+    private static final String HOME_KEY = "home_menu_name";
 
     public enum InputMode { CREATE, RENAME }
     public record PendingInput(InputMode mode, String oldName, Location createLocation) {}
 
-    public HomesCommand(GalaxyHomes p) {
-        super(p);
-    }
+    public HomesCommand(GalaxyHomes p) { super(p); }
 
     @Override
     public boolean onCommand(CommandSender s, Command c, String l, String[] a) {
         if (!permission(s, "galaxyhomes.homes")) return true;
-        Player p = player(s);
-        if (p == null) return true;
-        open(p, 0);
+        Player player = player(s);
+        if (player != null) open(player, 0);
         return true;
     }
 
@@ -55,9 +54,9 @@ public class HomesCommand extends BaseCommand {
 
     private void openJavaHomes(Player player, int page) {
         List<Home> homes = new ArrayList<>(data(player).getHomes().values());
-        Inventory inv = Bukkit.createInventory(null, 54, MessageUtils.color("&8&l" + JAVA_HOME_TITLE));
         int currentPage = Math.max(0, page);
         int start = currentPage * 45;
+        Inventory inv = Bukkit.createInventory(null, 54, MessageUtils.color("&8&l" + JAVA_HOME_TITLE));
 
         for (int i = start; i < Math.min(start + 45, homes.size()); i++) {
             Home home = homes.get(i);
@@ -75,23 +74,24 @@ public class HomesCommand extends BaseCommand {
             inv.setItem(i - start, item);
         }
 
-        // The bottom row is reserved for the requested Java-only GUI controls.
+        // Java-only footer controls: create, creator credit, and home management.
         inv.setItem(45, menuItem(Material.GREEN_WOOL, "§a§lNew home here",
             List.of("§7Create a home at your current location"), "new_home", null));
         inv.setItem(49, menuItem(Material.NETHER_STAR, "§6§lMade by Shrikee",
             List.of("§eMade by shrikee <3"), "creator_info", null));
         inv.setItem(53, menuItem(Material.ORANGE_WOOL, "§6§lManage homes",
             List.of("§7Rename or delete a home"), "manage_homes", null));
-        if (currentPage > 0) inv.setItem(47, menuItem(Material.ARROW, "§fPrevious page", List.of(), "prev_page", null));
-        if (start + 45 < homes.size()) inv.setItem(51, menuItem(Material.ARROW, "§fNext page", List.of(), "next_page", null));
+        if (currentPage > 0) inv.setItem(47, menuItem(Material.ARROW, "§fPrevious page",
+            List.of(), "prev_page", String.valueOf(currentPage - 1)));
+        if (start + 45 < homes.size()) inv.setItem(51, menuItem(Material.ARROW, "§fNext page",
+            List.of(), "next_page", String.valueOf(currentPage + 1)));
         player.openInventory(inv);
     }
 
     public void openJavaManageHomes(Player player) {
         List<Home> homes = new ArrayList<>(data(player).getHomes().values());
         Inventory inv = Bukkit.createInventory(null, 54, MessageUtils.color("&8&l" + JAVA_MANAGE_TITLE));
-        int limit = Math.min(45, homes.size());
-        for (int i = 0; i < limit; i++) {
+        for (int i = 0; i < Math.min(45, homes.size()); i++) {
             Home home = homes.get(i);
             ItemStack item = new ItemStack(Material.RED_BED);
             ItemMeta meta = item.getItemMeta();
@@ -102,9 +102,11 @@ public class HomesCommand extends BaseCommand {
             item.setItemMeta(meta);
             inv.setItem(i, item);
         }
-        if (homes.isEmpty()) inv.setItem(22, menuItem(Material.BOOK, "§cNo homes yet", List.of("§7Use New home here to create one"), "none", null));
+        if (homes.isEmpty()) inv.setItem(22, menuItem(Material.BOOK, "§cNo homes yet",
+            List.of("§7Use New home here to create one"), "none", null));
         inv.setItem(49, menuItem(Material.ARROW, "§fBack to homes", List.of(), "back_homes", null));
-        inv.setItem(45, menuItem(Material.GREEN_WOOL, "§a§lNew home here", List.of("§7Create a home at your current location"), "new_home", null));
+        inv.setItem(45, menuItem(Material.GREEN_WOOL, "§a§lNew home here",
+            List.of("§7Create a home at your current location"), "new_home", null));
         player.openInventory(inv);
     }
 
@@ -121,7 +123,7 @@ public class HomesCommand extends BaseCommand {
             "§7X: §f" + (int) home.getX() + " §7Y: §f" + (int) home.getY() + " §7Z: §f" + (int) home.getZ()
         ), "home_info", home.getName()));
         inv.setItem(11, menuItem(Material.ENDER_PEARL, "§aTeleport", List.of("§7Teleport to this home"), "teleport_home", home.getName()));
-        inv.setItem(13 + 9, menuItem(Material.NAME_TAG, "§eRename", List.of("§7Choose a new name"), "rename_home", home.getName()));
+        inv.setItem(22, menuItem(Material.NAME_TAG, "§eRename", List.of("§7Choose a new name"), "rename_home", home.getName()));
         inv.setItem(15, menuItem(Material.REDSTONE, "§cDelete", List.of("§7Delete this home"), "delete_home", home.getName()));
         inv.setItem(49, menuItem(Material.ARROW, "§fBack", List.of(), "back_manage", null));
         player.openInventory(inv);
@@ -134,25 +136,23 @@ public class HomesCommand extends BaseCommand {
         player.openInventory(inv);
     }
 
-    /** Handles clicks in Java homes submenus; returns true when the GUI owns the click. */
-    public boolean handleJavaGuiClick(Player player, String title, ItemStack clicked, int rawSlot) {
+    /** Handles our Java inventory menus and returns true when a click belongs to one. */
+    public boolean handleJavaGuiClick(Player player, String title, ItemStack clicked) {
         if (!JAVA_HOME_TITLE.equalsIgnoreCase(title) && !JAVA_MANAGE_TITLE.equalsIgnoreCase(title)
             && !JAVA_ACTIONS_TITLE.equalsIgnoreCase(title) && !JAVA_DELETE_TITLE.equalsIgnoreCase(title)) return false;
-
         if (clicked == null || clicked.getType() == Material.AIR) return true;
+
         ItemMeta meta = clicked.getItemMeta();
         if (meta == null) return true;
-        NamespacedKey actionKey = new NamespacedKey(plugin, "home_menu_action");
-        NamespacedKey nameKey = new NamespacedKey(plugin, "home_menu_name");
-        String action = meta.getPersistentDataContainer().get(actionKey, PersistentDataType.STRING);
-        String name = meta.getPersistentDataContainer().get(nameKey, PersistentDataType.STRING);
+        String action = meta.getPersistentDataContainer().get(new NamespacedKey(plugin, ACTION_KEY), PersistentDataType.STRING);
+        String name = meta.getPersistentDataContainer().get(new NamespacedKey(plugin, HOME_KEY), PersistentDataType.STRING);
 
         if (JAVA_HOME_TITLE.equalsIgnoreCase(title)) {
             if ("new_home".equals(action)) beginCreate(player);
             else if ("manage_homes".equals(action)) openJavaManageHomes(player);
-            else if ("prev_page".equals(action)) openJavaHomes(player, Math.max(0, rawSlotPage(player) - 1));
-            else if ("next_page".equals(action)) openJavaHomes(player, rawSlotPage(player) + 1);
-            else if ("teleport_home".equals(action) && name != null) teleportHome(player, name);
+            else if (("prev_page".equals(action) || "next_page".equals(action)) && name != null) {
+                try { openJavaHomes(player, Integer.parseInt(name)); } catch (NumberFormatException ignored) { openJavaHomes(player, 0); }
+            } else if ("teleport_home".equals(action) && name != null) teleportHome(player, name);
             return true;
         }
         if (JAVA_MANAGE_TITLE.equalsIgnoreCase(title)) {
@@ -162,10 +162,9 @@ public class HomesCommand extends BaseCommand {
             return true;
         }
         if (JAVA_ACTIONS_TITLE.equalsIgnoreCase(title)) {
-            if (name == null) return true;
-            if ("teleport_home".equals(action)) teleportHome(player, name);
-            else if ("rename_home".equals(action)) beginRename(player, name);
-            else if ("delete_home".equals(action)) confirmJavaDelete(player, name);
+            if (name != null && "teleport_home".equals(action)) teleportHome(player, name);
+            else if (name != null && "rename_home".equals(action)) beginRename(player, name);
+            else if (name != null && "delete_home".equals(action)) confirmJavaDelete(player, name);
             else if ("back_manage".equals(action)) openJavaManageHomes(player);
             return true;
         }
@@ -175,11 +174,6 @@ public class HomesCommand extends BaseCommand {
             return true;
         }
         return true;
-    }
-
-    // Bottom controls only appear on the first Java homes page; current page is inferred from visible home metadata.
-    private int rawSlotPage(Player player) {
-        return Math.max(0, player.getOpenInventory().getTopInventory().getItem(0) == null ? 0 : 0);
     }
 
     private ItemStack menuItem(Material material, String displayName, List<String> lore, String action, String name) {
@@ -194,8 +188,8 @@ public class HomesCommand extends BaseCommand {
     }
 
     private void setMenuData(ItemMeta meta, String action, String name) {
-        meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "home_menu_action"), PersistentDataType.STRING, action);
-        if (name != null) meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "home_menu_name"), PersistentDataType.STRING, name);
+        meta.getPersistentDataContainer().set(new NamespacedKey(plugin, ACTION_KEY), PersistentDataType.STRING, action);
+        if (name != null) meta.getPersistentDataContainer().set(new NamespacedKey(plugin, HOME_KEY), PersistentDataType.STRING, name);
     }
 
     private void openBedrockHomes(Player player, int page) {
@@ -208,10 +202,7 @@ public class HomesCommand extends BaseCommand {
         int to = Math.min(from + BEDROCK_PAGE_SIZE, homes.size());
         List<GeyserUtils.Button> buttons = new ArrayList<>();
         if (maxHomes < 0 || homes.size() < maxHomes) buttons.add(new GeyserUtils.Button("+ New home here", "new_home"));
-        for (int i = from; i < to; i++) {
-            Home home = homes.get(i);
-            buttons.add(new GeyserUtils.Button(home.getName(), "home:" + home.getName()));
-        }
+        for (int i = from; i < to; i++) buttons.add(new GeyserUtils.Button(homes.get(i).getName(), "home:" + homes.get(i).getName()));
         if (currentPage > 0) buttons.add(new GeyserUtils.Button("Previous page", "page:" + (currentPage - 1)));
         if (currentPage + 1 < pageCount) buttons.add(new GeyserUtils.Button("Next page", "page:" + (currentPage + 1)));
         buttons.add(new GeyserUtils.Button("Manage homes", "manage"));
@@ -247,9 +238,8 @@ public class HomesCommand extends BaseCommand {
         Home home = data(player).getHome(homeName);
         if (home == null) { MessageUtils.sendMessage(player, "home-not-found", Map.of("name", homeName)); openBedrockHomes(player, 0); return; }
         String details = home.getWorldName() + " " + (int) home.getX() + " " + (int) home.getY() + " " + (int) home.getZ();
-        List<GeyserUtils.Button> buttons = List.of(
-            new GeyserUtils.Button("Teleport", "teleport"), new GeyserUtils.Button("Rename", "rename"),
-            new GeyserUtils.Button("Delete", "delete"), new GeyserUtils.Button("Back", "back"));
+        List<GeyserUtils.Button> buttons = List.of(new GeyserUtils.Button("Teleport", "teleport"),
+            new GeyserUtils.Button("Rename", "rename"), new GeyserUtils.Button("Delete", "delete"), new GeyserUtils.Button("Back", "back"));
         GeyserUtils.sendForm(player, "home-actions-" + homeName, home.getName(), details, buttons,
             (p, response) -> Bukkit.getScheduler().runTask(plugin, () -> {
                 if ("teleport".equals(response)) teleportHome(p, homeName);
