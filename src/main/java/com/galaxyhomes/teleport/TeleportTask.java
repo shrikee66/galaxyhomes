@@ -14,11 +14,10 @@ public class TeleportTask extends BukkitRunnable {
     private final Player player;
     private final Location destination;
     private final Location startLocation;
-    private final int totalSeconds;
     private final String type;
     private final TeleportManager.TeleportCallback callback;
     private int remainingSeconds;
-    private int tickCounter = 0;
+    private int tickCounter;
     private final ConfigManager configManager;
 
     public TeleportTask(TeleportManager manager, Player player, Location destination,
@@ -29,7 +28,6 @@ public class TeleportTask extends BukkitRunnable {
         this.player = player;
         this.destination = destination;
         this.startLocation = startLocation;
-        this.totalSeconds = totalSeconds;
         this.type = type;
         this.callback = callback;
         this.remainingSeconds = totalSeconds;
@@ -38,37 +36,34 @@ public class TeleportTask extends BukkitRunnable {
     @Override
     public void run() {
         if (!player.isOnline() || !player.isValid()) {
-            cancel();
             manager.cancelTeleport(player.getUniqueId(), "teleport-cancelled-command");
             return;
         }
 
         if (configManager.isCancelOnMove()) {
             double threshold = configManager.getMoveThreshold();
-            if (player.getLocation().distanceSquared(startLocation) > threshold * threshold) {
-                cancel();
+            Location current = player.getLocation();
+            if (current.getWorld() != startLocation.getWorld()
+                || current.distanceSquared(startLocation) > threshold * threshold) {
+                // Let the manager cancel the task so it can also notify, play sound, and spawn particles.
                 manager.cancelTeleport(player.getUniqueId(), "teleport-cancelled-move");
                 return;
             }
         }
 
         if (configManager.isCountdownEnabled() && remainingSeconds > 0) {
-            String format = configManager.getCountdownFormat();
-            String message = format.replace("{time}", String.valueOf(remainingSeconds));
+            String message = configManager.getCountdownFormat().replace("{time}", String.valueOf(remainingSeconds));
             MessageUtils.sendRawMessage(player, message);
         }
+        if (remainingSeconds > 0) SoundUtils.playSound(player, configManager.getSoundConfig("countdown"));
 
-        if (remainingSeconds > 0) {
-            SoundUtils.playSound(player, configManager.getSoundConfig("countdown"));
-        }
-
-        if (tickCounter % Math.max(1, configManager.getWarmupParticleConfig().intervalTicks) == 0) {
-            ParticleUtils.spawnParticles(player.getLocation(), configManager.getWarmupParticleConfig());
+        ConfigManager.ParticleConfig warmupParticles = configManager.getWarmupParticleConfig();
+        if (tickCounter % Math.max(1, warmupParticles.intervalTicks) == 0) {
+            ParticleUtils.spawnParticles(player.getLocation(), warmupParticles);
         }
 
         tickCounter++;
         remainingSeconds--;
-
         if (remainingSeconds < 0) {
             cancel();
             manager.performTeleport(player, destination, callback);
