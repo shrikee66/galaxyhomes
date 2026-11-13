@@ -13,12 +13,8 @@ public final class GeyserUtils {
     private GeyserUtils() {}
 
     public record Button(String text, String response, String imageType, String imageData) {
-        public Button(String text, String response) { this(text, response, null, null); }
-        public Button(String text, String response, String imageType, String imageData) {
-            this.text = text;
-            this.response = response;
-            this.imageType = imageType;
-            this.imageData = imageData;
+        public Button(String text, String response) {
+            this(text, response, null, null);
         }
     }
 
@@ -34,25 +30,32 @@ public final class GeyserUtils {
         }
     }
 
-    /** Sends a native Bedrock SimpleForm with optional item icons and routes button responses. */
+    /** Sends a native Bedrock SimpleForm and routes selected button responses. */
     public static void sendForm(Player player, String id, String title, String content,
                                  List<Button> buttons, BiConsumer<Player, String> callback) {
         if (player == null || !isBedrockPlayer(player)) return;
+
         try {
             Class<?> simpleForm = Class.forName("org.geysermc.cumulus.form.SimpleForm");
             Object builder = simpleForm.getMethod("builder").invoke(null);
-            invokeString(builder, "title", title);
-            invokeString(builder, "content", content);
-            for (Button button : buttons) addButton(builder, button);
+            builder.getClass().getMethod("title", String.class).invoke(builder, title);
+            builder.getClass().getMethod("content", String.class).invoke(builder, content);
+
+            for (Button button : buttons) {
+                addButton(builder, button);
+            }
 
             Method handlerMethod = findConsumerMethod(builder.getClass(), "validResultHandler");
             if (handlerMethod != null && callback != null) {
                 Consumer<Object> handler = response -> {
                     try {
-                        int index = ((Number) response.getClass().getMethod("clickedButtonId").invoke(response)).intValue();
-                        if (index >= 0 && index < buttons.size()) callback.accept(player, buttons.get(index).response());
+                        int index = ((Number) response.getClass().getMethod("clickedButtonId")
+                            .invoke(response)).intValue();
+                        if (index >= 0 && index < buttons.size()) {
+                            callback.accept(player, buttons.get(index).response());
+                        }
                     } catch (ReflectiveOperationException | RuntimeException ignored) {
-                        // Invalid response: leave pending requests/homes untouched.
+                        // Invalid response: leave the operation available through normal commands.
                     }
                 };
                 handlerMethod.invoke(builder, handler);
@@ -69,31 +72,38 @@ public final class GeyserUtils {
                     return;
                 }
             }
+            throw new NoSuchMethodException("FloodgateApi.sendForm(UUID, Form) not found");
         } catch (ReflectiveOperationException | LinkageError | RuntimeException ex) {
-            player.sendMessage(MessageUtils.color("&e" + title + "&7: " + content + " &8(Use the in-game commands if forms are unavailable)"));
+            player.sendMessage(MessageUtils.color("&e" + title + "&7: " + content
+                + " &8(Use the in-game commands if forms are unavailable)"));
         }
     }
 
     private static void addButton(Object builder, Button button) throws ReflectiveOperationException {
-        if (button.imageType() != null && button.imageData() != null) {
-            Class<?> formImage = Class.forName("org.geysermc.cumulus.util.FormImage$Type");
-            @SuppressWarnings({"rawtypes", "unchecked"})
-            Object type = Enum.valueOf((Class<? extends Enum>) formImage.asSubclass(Enum.class), button.imageType());
-            Method withImage = builder.getClass().getMethod("button", String.class, formImage, String.class);
-            withImage.invoke(builder, button.text(), type, button.imageData());
-        } else {
-            invokeString(builder, "button", button.text());
+        if (button.imageType() == null || button.imageData() == null) {
+            builder.getClass().getMethod("button", String.class).invoke(builder, button.text());
+            return;
         }
-    }
 
-    private static void invokeString(Object target, String methodName, String value) throws ReflectiveOperationException {
-        target.getClass().getMethod(methodName, String.class).invoke(target, value);
+        try {
+            Class<?> imageTypeClass = Class.forName("org.geysermc.cumulus.util.FormImage$Type");
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Object imageType = Enum.valueOf((Class<? extends Enum>) imageTypeClass.asSubclass(Enum.class), button.imageType());
+            builder.getClass().getMethod("button", String.class, imageTypeClass, String.class)
+                .invoke(builder, button.text(), imageType, button.imageData());
+        } catch (ReflectiveOperationException | IllegalArgumentException unsupportedImageApi) {
+            // Avoid Bedrock's missing-texture black/pink icon: use a plain text button
+            // when a server's Cumulus version doesn't support the requested image API.
+            builder.getClass().getMethod("button", String.class).invoke(builder, button.text());
+        }
     }
 
     private static Method findConsumerMethod(Class<?> type, String methodName) {
         for (Method method : type.getMethods()) {
             if (method.getName().equals(methodName) && method.getParameterCount() == 1
-                && method.getParameterTypes()[0].isAssignableFrom(Consumer.class)) return method;
+                && method.getParameterTypes()[0].isAssignableFrom(Consumer.class)) {
+                return method;
+            }
         }
         return null;
     }
