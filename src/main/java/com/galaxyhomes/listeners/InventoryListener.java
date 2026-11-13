@@ -37,6 +37,7 @@ public class InventoryListener implements Listener {
 
         if ("Select player for TPA".equalsIgnoreCase(title) || "Select player for TPAHere".equalsIgnoreCase(title)) {
             event.setCancelled(true);
+            if (event.getRawSlot() < 0 || event.getRawSlot() >= event.getView().getTopInventory().getSize()) return;
             ItemStack item = event.getCurrentItem();
             if (item == null || item.getType() == Material.AIR) return;
             ItemMeta meta = item.getItemMeta();
@@ -57,7 +58,7 @@ public class InventoryListener implements Listener {
     public void drag(InventoryDragEvent event) {
         String title = ChatColor.stripColor(event.getView().getTitle());
         if (title != null && ("Homes".equalsIgnoreCase(title) || "Manage homes".equalsIgnoreCase(title)
-            || "Home actions".equalsIgnoreCase(title) || "Confirm home delete".equalsIgnoreCase(title)
+            || "Manage home".equalsIgnoreCase(title) || "Delete home?".equalsIgnoreCase(title)
             || "Select player for TPA".equalsIgnoreCase(title) || "Select player for TPAHere".equalsIgnoreCase(title))) {
             event.setCancelled(true);
         }
