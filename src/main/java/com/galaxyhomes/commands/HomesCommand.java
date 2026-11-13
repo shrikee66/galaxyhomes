@@ -2,16 +2,18 @@ package com.galaxyhomes.commands;
 
 import com.galaxyhomes.GalaxyHomes;
 import com.galaxyhomes.data.Home;
-import com.galaxyhomes.utils.GeyserUtils;
 import com.galaxyhomes.utils.MessageUtils;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,91 +37,1247 @@ public class HomesCommand extends BaseCommand {
     }
 
     public void open(Player player, int page) {
+        Inventory inv = Bukkit.createInventory(null, 54, "Homes");
+        NamespacedKey actionKey = new NamespacedKey(plugin, "menu_action");
+        NamespacedKey homeKey = new NamespacedKey(plugin, "home_name");
+
         List<Home> homes = new ArrayList<>(data(player).getHomes().values());
 
-        if (homes.isEmpty()) {
-            MessageUtils.sendMessage(player, "home-list-empty");
-            return;
-        }
-
-        if (GeyserUtils.isBedrockPlayer(player)) {
-            openBedrockHomes(player, homes);
-            return;
-        }
-
-        int size = 54;
-        Inventory inv = Bukkit.createInventory(
-            null, size, MessageUtils.color("&8&lYour Homes")
+        ItemStack newHome = createActionItem(
+            Material.GREEN_BED,
+            ChatColor.GREEN + "+ New home here",
+            List.of(ChatColor.GRAY + "Create a home at your current spot"),
+            "new_home",
+            null,
+            actionKey,
+            homeKey
         );
+        inv.setItem(0, newHome);
 
-        int start = page * 45;
-
-        for (int i = start; i < Math.min(start + 45, homes.size()); i++) {
-            Home home = homes.get(i);
-
-            ItemStack item = new ItemStack(Material.BOOK);
-            ItemMeta meta = item.getItemMeta();
-            if (meta == null) continue;
-
-            meta.setDisplayName(MessageUtils.color("&b&l" + home.getName()));
-            meta.setLore(List.of(
-                "§7World: §f" + home.getWorldName(),
-                "§7X: §f" + (int) home.getX() +
-                    " §7Y: §f" + (int) home.getY() +
-                    " §7Z: §f" + (int) home.getZ(),
-                "§aLeft-click to teleport"
-            ));
-
-            item.setItemMeta(meta);
-            inv.setItem(i - start, item);
+        int slot = 9;
+        for (Home home : homes) {
+            ItemStack item = createActionItem(
+                Material.RED_BED,
+                ChatColor.YELLOW + home.getName(),
+                List.of(
+                    ChatColor.GRAY + "World: " + ChatColor.WHITE + home.getWorldName(),
+                    ChatColor.GRAY + "X: " + ChatColor.WHITE + (int) home.getX() +
+                        ChatColor.GRAY + " Y: " + ChatColor.WHITE + (int) home.getY() +
+                        ChatColor.GRAY + " Z: " + ChatColor.WHITE + (int) home.getZ(),
+                    ChatColor.GREEN + "Click to manage"
+                ),
+                "open_home",
+                home.getName(),
+                actionKey,
+                homeKey
+            );
+            inv.setItem(slot++, item);
         }
 
-        if (page > 0) inv.setItem(45, new ItemStack(Material.ARROW));
-        if (start + 45 < homes.size()) inv.setItem(53, new ItemStack(Material.ARROW));
+        ItemStack manageHomes = createActionItem(
+            Material.OAK_SIGN,
+            ChatColor.AQUA + "Manage homes",
+            List.of(ChatColor.GRAY + "Edit, rename and delete your homes"),
+            "manage_homes",
+            null,
+            actionKey,
+            homeKey
+        );
+        inv.setItem(53, manageHomes);
+
+        if (homes.isEmpty()) {
+            inv.setItem(9, createActionItem(
+                Material.BOOK,
+                ChatColor.RED + "No homes yet",
+                List.of(ChatColor.GRAY + "Use the green bed to create one"),
+                "none",
+                null,
+                actionKey,
+                homeKey
+            ));
+        }
 
         player.openInventory(inv);
     }
 
-    private void openBedrockHomes(Player player, List<Home> homes) {
-        List<GeyserUtils.Button> buttons = new ArrayList<>();
+    public void openManageHomesMenu(Player player) {
+        List<Home> homes = new ArrayList<>(data(player).getHomes().values());
+        Inventory inv = Bukkit.createInventory(null, 54, "Manage homes");
+        NamespacedKey actionKey = new NamespacedKey(plugin, "menu_action");
+        NamespacedKey homeKey = new NamespacedKey(plugin, "home_name");
+
+        int slot = 0;
         for (Home home : homes) {
-            String label = home.getName() + " (" + home.getWorldName() + ")";
-            buttons.add(new GeyserUtils.Button(label, "home:" + home.getName()));
+            inv.setItem(slot++, createActionItem(
+                Material.RED_BED,
+                ChatColor.YELLOW + home.getName(),
+                List.of(
+                    ChatColor.GRAY + "World: " + ChatColor.WHITE + home.getWorldName(),
+                    ChatColor.GRAY + "Click to manage"
+                ),
+                "open_home",
+                home.getName(),
+                actionKey,
+                homeKey
+            ));
         }
 
-        GeyserUtils.sendForm(
-            player,
-            "bedrock-homes-" + player.getUniqueId(),
-            "Your Homes",
-            "Choose a home to teleport to.",
-            buttons,
-            (bedrockPlayer, response) -> {
-                if (response == null || !response.startsWith("home:")) return;
-                String homeName = response.substring("home:".length());
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    Home selected = data(bedrockPlayer).getHome(homeName);
-                    if (selected == null) {
-                        MessageUtils.sendMessage(bedrockPlayer, "home-not-found", Map.of("name", homeName));
-                        return;
-                    }
-                    teleportToHome(bedrockPlayer, selected);
-                });
-            }
-        );
+        if (homes.isEmpty()) {
+            inv.setItem(0, createActionItem(
+                Material.BOOK,
+                ChatColor.RED + "No homes yet",
+                List.of(ChatColor.GRAY + "Use /sethome first"),
+                "none",
+                null,
+                actionKey,
+                homeKey
+            ));
+        }
+
+        player.openInventory(inv);
     }
 
-    private void teleportToHome(Player player, Home home) {
-        var location = home.toLocation();
-        if (location == null) {
-            player.sendMessage("§cThat home's world is unavailable.");
+    public void openHomeDetailMenu(Player player, String homeName) {
+        Home home = data(player).getHome(homeName);
+        if (home == null) {
+            MessageUtils.sendMessage(player, "home-not-found", Map.of("name", homeName));
             return;
         }
 
-        MessageUtils.sendMessage(player, "home-teleporting", Map.of("name", home.getName()));
-        plugin.getTeleportManager().startTeleport(player, location, "home", success -> {
-            if (success) {
-                MessageUtils.sendMessage(player, "home-teleported", Map.of("name", home.getName()));
-            }
-        });
+        Inventory inv = Bukkit.createInventory(null, 54, home.getName());
+        NamespacedKey actionKey = new NamespacedKey(plugin, "menu_action");
+        NamespacedKey homeKey = new NamespacedKey(plugin, "home_name");
+
+        inv.setItem(10, createActionItem(
+            Material.ENDER_PEARL,
+            ChatColor.GREEN + "Teleport",
+            List.of(ChatColor.GRAY + "Travel to this home"),
+            "teleport_home",
+            home.getName(),
+            actionKey,
+            homeKey
+        ));
+
+        inv.setItem(19, createActionItem(
+            Material.NAME_TAG,
+            ChatColor.AQUA + "Rename",
+            List.of(ChatColor.GRAY + "Rename this home"),
+            "rename_home",
+            home.getName(),
+            actionKey,
+            homeKey
+        ));
+
+        inv.setItem(28, createActionItem(
+            Material.BUCKET,
+            ChatColor.RED + "Delete",
+            List.of(ChatColor.GRAY + "Remove this home"),
+            "delete_home",
+            home.getName(),
+            actionKey,
+            homeKey
+        ));
+
+        itemInfoHeader(inv, home);
+        player.openInventory(inv);
+    }
+
+    private void itemInfoHeader(Inventory inv, Home home) {
+        ItemStack header = new ItemStack(Material.WRITABLE_BOOK);
+        ItemMeta meta = header.getItemMeta();
+        if (meta == null) return;
+
+        meta.setDisplayName(ChatColor.WHITE + home.getName());
+        meta.setLore(List.of(
+            ChatColor.GRAY + "World: " + ChatColor.WHITE + home.getWorldName(),
+            ChatColor.GRAY + "X: " + ChatColor.WHITE + (int) home.getX() +
+                ChatColor.GRAY + " Y: " + ChatColor.WHITE + (int) home.getY() +
+                ChatColor.GRAY + " Z: " + ChatColor.WHITE + (int) home.getZ()
+        ));
+        header.setItemMeta(meta);
+        inv.setItem(13, header);
+    }
+
+    private ItemStack createActionItem(
+        Material material,
+        String displayName,
+        List<String> lore,
+        String action,
+        String homeName,
+        NamespacedKey actionKey,
+        NamespacedKey homeKey
+    ) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return item;
+
+        meta.setDisplayName(displayName);
+        meta.setLore(lore);
+        meta.getPersistentDataContainer().set(actionKey, PersistentDataType.STRING, action);
+        if (homeName != null && !homeName.isBlank()) {
+            meta.getPersistentDataContainer().set(homeKey, PersistentDataType.STRING, homeName);
+        }
+        item.setItemMeta(meta);
+        return item;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"" 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+nnn
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+n
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\n"},{
