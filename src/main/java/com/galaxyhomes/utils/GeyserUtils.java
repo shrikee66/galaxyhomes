@@ -44,16 +44,18 @@ public final class GeyserUtils {
             invokeString(builder, "content", content);
             for (Button button : buttons) invokeString(builder, "button", button.text());
 
-            Method resultHandler = findSingleArgumentMethod(builder.getClass(), "validResultHandler");
-            if (resultHandler != null && callback != null
-                && Consumer.class.isAssignableFrom(resultHandler.getParameterTypes()[0])) {
+            // Cumulus has both Consumer and BiConsumer overloads. Select the Consumer
+            // overload explicitly; choosing the first overload silently omitted our handler.
+            Method resultHandler = findConsumerMethod(builder.getClass(), "validResultHandler");
+            if (resultHandler != null && callback != null) {
                 Consumer<Object> handler = response -> {
                     try {
-                        int index = ((Number) response.getClass().getMethod("clickedButtonId").invoke(response)).intValue();
+                        int index = ((Number) response.getClass().getMethod("clickedButtonId")
+                            .invoke(response)).intValue();
                         if (index >= 0 && index < buttons.size()) {
                             callback.accept(player, buttons.get(index).response());
                         }
-                    } catch (ReflectiveOperationException ignored) {
+                    } catch (ReflectiveOperationException | RuntimeException ignored) {
                         // Invalid or unsupported response; leave the request available to commands.
                     }
                 };
@@ -63,18 +65,13 @@ public final class GeyserUtils {
             Object form = builder.getClass().getMethod("build").invoke(builder);
             Class<?> apiClass = Class.forName("org.geysermc.floodgate.api.FloodgateApi");
             Object api = apiClass.getMethod("getInstance").invoke(null);
-            Method sendForm = null;
             for (Method method : apiClass.getMethods()) {
                 Class<?>[] params = method.getParameterTypes();
                 if (method.getName().equals("sendForm") && params.length == 2
                     && params[0] == UUID.class && params[1].isInstance(form)) {
-                    sendForm = method;
-                    break;
+                    method.invoke(api, player.getUniqueId(), form);
+                    return;
                 }
-            }
-            if (sendForm != null) {
-                sendForm.invoke(api, player.getUniqueId(), form);
-                return;
             }
         } catch (ReflectiveOperationException | LinkageError | RuntimeException ignored) {
             // Fall through to a usable command-based fallback if form APIs aren't available.
@@ -89,9 +86,12 @@ public final class GeyserUtils {
         method.invoke(target, value);
     }
 
-    private static Method findSingleArgumentMethod(Class<?> type, String methodName) {
+    private static Method findConsumerMethod(Class<?> type, String methodName) {
         for (Method method : type.getMethods()) {
-            if (method.getName().equals(methodName) && method.getParameterCount() == 1) return method;
+            if (method.getName().equals(methodName) && method.getParameterCount() == 1
+                && method.getParameterTypes()[0].isAssignableFrom(Consumer.class)) {
+                return method;
+            }
         }
         return null;
     }
