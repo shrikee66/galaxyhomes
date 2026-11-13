@@ -1,9 +1,9 @@
-name: Build GalaxyHomes Plugin
+name: Test Unzip Only
 
 on: [push]
 
 jobs:
-  build:
+  unzip-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -11,24 +11,11 @@ jobs:
 
       - name: Clean workspace completely
         run: |
-          # Sab kuch delete kar do, sirf plugin.zip aur hidden git/github folders ko chhod kar
           find . -maxdepth 1 ! -name '.' ! -name '.git' ! -name 'plugin.zip' ! -name '.github' -exec rm -rf {} +
 
       - name: Unzip plugin source
         run: unzip -o plugin.zip
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Build with Maven
-        run: mvn clean package
-
-      - name: Upload Plugin JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: GalaxyHomes-Plugin
-          path: target/GalaxyHomes-*.jar
-          
+      - name: List extracted files to verify
+        run: ls -R
+        
