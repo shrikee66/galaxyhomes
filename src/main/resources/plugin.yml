@@ -1,0 +1,146 @@
+
+name: GalaxyHomes
+version: ${project.version}
+main: com.galaxyhomes.GalaxyHomes
+api-version: 1.21
+load: STARTUP
+author: GalaxyHomes Team
+description: Cross-platform homes, TPA, and spawn system for Paper/Floodgate
+website: https://github.com/galaxyhomes/GalaxyHomes
+
+commands:
+  sethome:
+    description: Set a home at your current location
+    usage: /sethome [name]
+    permission: galaxyhomes.sethome
+    permission-message: "&cYou don't have permission to set homes!"
+  home:
+    description: Teleport to a home or open the homes GUI
+    usage: /home [name]
+    permission: galaxyhomes.home
+    permission-message: "&cYou don't have permission to use homes!"
+  homes:
+    description: List all your homes
+    usage: /homes
+    permission: galaxyhomes.homes
+    permission-message: "&cYou don't have permission to list homes!"
+  delhome:
+    description: Delete a home
+    usage: /delhome <name>
+    permission: galaxyhomes.delhome
+    permission-message: "&cYou don't have permission to delete homes!"
+  spawn:
+    description: Teleport to the server spawn
+    usage: /spawn
+    permission: galaxyhomes.spawn
+    permission-message: "&cYou don't have permission to use spawn!"
+  setspawn:
+    description: Set the server spawn point
+    usage: /setspawn
+    permission: galaxyhomes.setspawn
+    permission-message: "&cYou don't have permission to set spawn!"
+  tpa:
+    description: Request to teleport to a player
+    usage: /tpa <player>
+    permission: galaxyhomes.tpa
+    permission-message: "&cYou don't have permission to request teleports!"
+  tpahere:
+    description: Request a player to teleport to you
+    usage: /tpahere <player>
+    permission: galaxyhomes.tpahere
+    permission-message: "&cYou don't have permission to request teleports here!"
+  tpaccept:
+    description: Accept a teleport request
+    usage: /tpaccept
+    permission: galaxyhomes.tpaccept
+    permission-message: "&cYou don't have permission to accept teleports!"
+  tpdeny:
+    description: Deny a teleport request
+    usage: /tpdeny
+    permission: galaxyhomes.tpdeny
+    permission-message: "&cYou don't have permission to deny teleports!"
+  tpacancel:
+    description: Cancel your outgoing teleport request
+    usage: /tpacancel
+    permission: galaxyhomes.tpacancel
+    permission-message: "&cYou don't have permission to cancel teleports!"
+  tpatoggle:
+    description: Toggle receiving teleport requests
+    usage: /tpatoggle
+    permission: galaxyhomes.tpatoggle
+    permission-message: "&cYou don't have permission to toggle teleports!"
+  tpasettings:
+    description: Open TPA settings GUI
+    usage: /tpasettings
+    permission: galaxyhomes.tpasettings
+    permission-message: "&cYou don't have permission to open TPA settings!"
+  crossplayhomes:
+    description: Admin command for GalaxyHomes
+    usage: /crossplayhomes <reload|backup|stats>
+    permission: galaxyhomes.admin
+    permission-message: "&cYou don't have permission to use admin commands!"
+    aliases: [chomes, galaxyhomes]
+
+permissions:
+  galaxyhomes.*:
+    description: All GalaxyHomes permissions
+    default: op
+    children:
+      galaxyhomes.sethome: true
+      galaxyhomes.home: true
+      galaxyhomes.homes: true
+      galaxyhomes.delhome: true
+      galaxyhomes.spawn: true
+      galaxyhomes.setspawn: true
+      galaxyhomes.tpa: true
+      galaxyhomes.tpahere: true
+      galaxyhomes.tpaccept: true
+      galaxyhomes.tpdeny: true
+      galaxyhomes.tpacancel: true
+      galaxyhomes.tpatoggle: true
+      galaxyhomes.tpasettings: true
+      galaxyhomes.admin: true
+  galaxyhomes.sethome:
+    description: Allows setting homes
+    default: true
+  galaxyhomes.home:
+    description: Allows teleporting to homes
+    default: true
+  galaxyhomes.homes:
+    description: Allows listing homes
+    default: true
+  galaxyhomes.delhome:
+    description: Allows deleting homes
+    default: true
+  galaxyhomes.spawn:
+    description: Allows using spawn
+    default: true
+  galaxyhomes.setspawn:
+    description: Allows setting spawn
+    default: op
+  galaxyhomes.tpa:
+    description: Allows requesting teleport to player
+    default: true
+  galaxyhomes.tpahere:
+    description: Allows requesting player teleport here
+    default: true
+  galaxyhomes.tpaccept:
+    description: Allows accepting teleport requests
+    default: true
+  galaxyhomes.tpdeny:
+    description: Allows denying teleport requests
+    default: true
+  galaxyhomes.tpacancel:
+    description: Allows canceling teleport requests
+    default: true
+  galaxyhomes.tpatoggle:
+    description: Allows toggling TPA requests
+    default: true
+  galaxyhomes.tpasettings:
+    description: Allows opening TPA settings
+    default: true
+  galaxyhomes.admin:
+    description: Admin permissions for GalaxyHomes
+    default: op
+
+softdepend: [Floodgate, Cumulus]
